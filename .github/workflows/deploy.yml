@@ -16,12 +16,13 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/statuspulse
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set image name
-        run: echo "IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/statuspulse" >> "$GITHUB_ENV"
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -37,10 +38,8 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:latest
 
-       - name: Deploy to server
+      - name: Deploy to server
         if: ${{ env.SERVER_HOST != '' }}
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
