@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create env file
+        run: cp .env.example .env
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint Python code
+        run: ruff check app
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+      - name: Build Docker image
+        run: docker build -t statuspulse:ci .
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait for app health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8000/health; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Run integration tests
+        run: |
+          mkdir -p test-results
+          ./tests/test_integration.sh | tee test-results/integration-test-output.txt
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: test-results/
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
